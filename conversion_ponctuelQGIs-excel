@@ -1,0 +1,59 @@
+from qgis.core import (
+    QgsProject,
+    QgsVectorLayer,
+    QgsField,
+    QgsVectorFileWriter,
+    QgsCoordinateTransformContext,
+    QgsWkbTypes
+)
+from PyQt5.QtCore import QVariant
+import os
+
+# 1. Sélectionner la couche active 
+layer = iface.activeLayer()
+
+# 2. Vérifier si c'est bien une couche de points
+if layer.geometryType() != QgsWkbTypes.PointGeometry:
+    raise Exception("La couche sélectionnée n'est pas une couche de points.")
+
+# 3. Ajouter les champs latitude/longitude s'ils n'existent pas déjà
+layer.startEditing()
+fields = [f.name().lower() for f in layer.fields()]
+
+if 'latitude' not in fields:
+    layer.addAttribute(QgsField('latitude', QVariant.Double))
+
+if 'longitude' not in fields:
+    layer.addAttribute(QgsField('longitude', QVariant.Double))
+
+layer.updateFields()
+
+# 4. Calcule les coordonnées
+for feature in layer.getFeatures():
+    geom = feature.geometry()
+    point = geom.asPoint()
+    fid = feature.id()
+    layer.changeAttributeValue(fid, layer.fields().indexFromName('latitude'), point.y())
+    layer.changeAttributeValue(fid, layer.fields().indexFromName('longitude'), point.x())
+
+layer.commitChanges()
+
+# 5. Export vers un fichier Excel
+output_path = os.path.expanduser("~/export_points.xlsx")  # adaptez ce chemin si besoin
+
+options = QgsVectorFileWriter.SaveVectorOptions()
+options.driverName = "XLSX"
+options.fileEncoding = "UTF-8"
+context = QgsProject.instance().transformContext()
+
+error = QgsVectorFileWriter.writeAsVectorFormatV2(
+    layer,
+    output_path,
+    context,
+    options
+)
+
+if error[0] == QgsVectorFileWriter.NoError:
+    print(f"Export réussi : {output_path}")
+else:
+    print(f"Erreur lors de l'export : {error}")
