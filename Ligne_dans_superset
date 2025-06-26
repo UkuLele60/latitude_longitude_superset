@@ -1,0 +1,48 @@
+from qgis.core import *
+import os
+import json
+import pandas as pd
+
+# Sélectionner la couche active (doit être une couche de lignes)
+layer = iface.activeLayer()
+
+if not layer or layer.geometryType() != QgsWkbTypes.LineGeometry:
+    raise Exception("La couche active doit être une couche de lignes.")
+
+features = list(layer.getFeatures())
+data = []
+
+for feat in features:
+    row = feat.attributes()
+    
+    # Extraire la géométrie
+    geom = feat.geometry()
+    geom_wgs84 = geom.constGet()  # évite reprojection si déjà en WGS84
+    coords = []
+
+    if geom.isMultipart():
+        # On prend toutes les lignes multi-part
+        multi = geom.asMultiPolyline()
+        for line in multi:
+            coords.extend([[pt.x(), pt.y()] for pt in line])
+    else:
+        line = geom.asPolyline()
+        coords = [[pt.x(), pt.y()] for pt in line]
+
+    # Ajouter la géométrie en texte JSON dans une nouvelle colonne
+    row.append(json.dumps(coords))
+    data.append(row)
+
+# Récupèrer les noms de champs
+field_names = [field.name() for field in layer.fields()]
+field_names.append("geometry")
+
+# Créer un Dataframe pandas
+df = pd.DataFrame(data, columns=field_names)
+
+# Chemin de sortie
+output_path = os.path.expanduser("C:/Users/lgrillon/Documents/Superset/lignes_export.xlsx")  # adapter au besoin
+
+# Export Excel
+df.to_excel(output_path, index=False)
+print(f"Exporté avec succès : {output_path}")
